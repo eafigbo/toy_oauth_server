@@ -1,0 +1,120 @@
+{% extends "base.html"%}
+{% block title %} Index {% endblock %}
+{% block content %}
+
+
+
+
+
+<br/>
+<div class="container">
+    <div class="row">
+    <div class="col">
+        <label for="first_name">First Name</label>
+    </div>
+    <div class="col-10">
+        {{user.first_name}}
+    </div>
+</div>
+
+
+
+<div class="row">
+    <div class="col">
+        <label for="last_name">Last Name</label>
+    </div>
+
+    <div class="col-10">
+        {{user.last_name}}
+    </div>
+</div>
+<br/>
+
+<div class="row">
+    <div class="col">
+        <label for="email">Email</label>
+    </div>
+
+    <div class="col-10">
+        {{user.email}}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col">
+        <label for="home_address">Home Address</label>
+    </div>
+
+    <div class="col-10">
+        {{user.address}}
+    </div>
+</div>
+
+
+
+<table border="1" >
+    <tr>
+        <td colspan="9" style="background-color: gray;">
+            Applications <a href="/add_application"> Add New Application] </a>
+        </td>
+    </tr>
+    <tr style="background-color: grey;">
+        <td >
+            Name
+        </td>
+        <td>
+            Description
+        </td>
+        <td>
+            Redirect URL
+        </td>
+        <td>
+            Client ID
+        </td>
+        <td>
+            Client Secret
+        </td>
+        <td>
+            ICON URL
+        </td>
+        <td>
+            Home Page URL
+        </td>
+        <td>
+            Privacy Policy URL
+        </td>
+
+    </tr>
+        {% for application in user.applications%}
+        <tr>
+            <td>
+                {{ application.application_name}}
+            </td>
+            <td>
+                {{ application.description}}
+            </td>
+            <td>
+                {{ application.redirect_url}}
+            </td>
+            <td>
+                {{ application.client_id}}
+            </td>
+            <td>
+                {{ application.client_secret}}
+            </td>
+            <td>
+                {{ application.icon_url}}
+            </td>
+            <td>
+                {{ application.home_page_url}}
+            </td>
+            <td>
+                {{ application.privacy_policy_url}}
+            </td>
+
+        </tr>
+        {% endfor %}
+
+    </table>
+
+{% endblock %} <!-- end block content-->

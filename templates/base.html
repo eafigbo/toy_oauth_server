@@ -1,0 +1,38 @@
+<html>
+    <head>
+        {% block head%}
+        <link rel="stylesheet" href="{{url_for('static', filename='bootstrap.min.css')}}?random={{ range(1, 51) | random }}">
+        <title> {% block title %}{% endblock %} </title>
+        {% endblock %}
+    </head>
+    <body>
+        <div id="message">
+            {{ message if message is not none else ' ' }}
+        </div>
+        <div id="header">
+            {% block header %}
+            <div class="container">
+                <div class="row">
+                    <div class="col-sm"><a href='/index'>[Home]</a></div>
+                    <div class="col-sm"><a href='/logout'>[Log Out]</a></div>
+                </div>
+            </div>
+
+            {% endblock %}
+        </div>
+        <div id="content">
+            {% block content %}
+            <p>
+                Hello there! Welcome to Toy OAuth2!
+            </p>
+            {% endblock %}
+        </div>
+        <div id="footer">
+            {% block footer %}
+            <p>
+               &copy; Copyright 2020 Ebe ano!
+            </p>
+            {% endblock %}
+        </div>
+    </body>
+</html>

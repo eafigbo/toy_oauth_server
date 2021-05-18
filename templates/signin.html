@@ -1,0 +1,42 @@
+{% extends "base.html"%}
+{% block title %} Index {% endblock %}
+{% block content %}
+
+<script type="text/javascript">
+
+</script>
+
+<form id="signin_form" action="/signuserin" method="POST">
+<br/>
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <label for="first_name">Email</label>
+        </div>
+        <div class="col-10">
+            <input type="email" name="email" id="email" required >
+        </div>
+    </div>
+    <br/>
+    <div class="row">
+        <div class="col">
+            <label for="password">Password</label>
+        </div>
+        <div class="col-10">
+            <input type="password" name="password" id="password"  required>
+        </div>
+    </div>
+
+<br/>
+
+<div class="row">
+    <div class="col">
+        <input value="Login" type="submit">
+    </div> 
+    <div class="col-10">
+        <input value="Cancel" type="button" onclick="location.href='/index'" >
+    </div>
+</div>
+
+</form>
+{% endblock %} <!-- end block content-->

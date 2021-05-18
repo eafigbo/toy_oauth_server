@@ -1,0 +1,71 @@
+{% extends "base.html"%}
+{% block title %} Index {% endblock %}
+{% block content %}
+
+<script type="text/javascript">
+function confirm_password_and_submit(){
+    if(document.getElementById("register_form").checkValidity()){
+        if(document.getElementById('password').value == document.getElementById('confirm_password').value){
+            document.getElementById('register_form').submit();
+        }else{
+            alert("Please enter matching passwords!")
+        }
+    }else{
+        alert('please complete all required fields')
+    }
+
+}
+</script>
+
+
+<form id="register_form" action="/registeruser" method="POST">
+
+<p>
+    <label for="first_name">First Name</label>
+    <input type="text" name="first_name" id="first_name" required >
+</p>
+
+
+<p>
+    <label for="last_name">Last Name</label>
+
+    <input type="text" name="last_name" id="last_name" required>
+</p>
+
+
+<p>
+    <label for="email">Email</label>
+
+    <input type="email" name="email" id="email" required>
+</p>
+
+
+<p>
+    <label for="home_address">Home Address</label>
+
+    <textarea  name="home_address" id="home_address" required></textarea>
+</p>
+
+
+<p>
+    <label for="password">Password (no leading or trailing spaces)</label>
+
+    <input type="password" name="password" id="password"  required>
+</p>
+
+<p>
+    <label for="confirm_password">Confirm Password</label>
+
+    <input type="password" name="confirm_password" id="confirm_password" required>
+</p>
+
+<p>
+    <input value="Submit" type="button" onclick="confirm_password_and_submit()">
+</p>
+
+<p>
+    <input value="Cancel" type="button" onclick="location.href='/index'" >
+</p>
+
+</form>
+{% endblock %} <!-- end block content-->

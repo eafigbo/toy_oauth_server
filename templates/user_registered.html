@@ -1,0 +1,26 @@
+{% extends "base.html"%}
+{% block title %} Index {% endblock %}
+{% block content %}
+
+
+
+<br/>
+<div class="container">
+    <div class="row">
+    <div class="row">
+        {{user.first_name}} {{user.last_name}} registered
+    </div>
+
+</div>
+
+<br/>
+
+<p>
+    <a href="/signin">Sign in</a>
+</p>
+
+<p>
+    <a href="/index">Home</a>
+</p>
+
+{% endblock %} <!-- end block content-->

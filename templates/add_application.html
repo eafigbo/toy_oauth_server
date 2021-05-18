@@ -1,0 +1,74 @@
+{% extends "base.html"%}
+{% block title %} Index {% endblock %}
+{% block content %}
+
+<script type="text/javascript">
+
+</script>
+
+<form id="signin_form" action="/save_application" method="POST">
+<br/>
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <label for="application_name">Application Name</label>
+        </div>
+        <div class="col-10">
+            <input type="text" name="application_name" id="application_name" required >
+        </div>
+    </div>
+    <br/>
+    <div class="row">
+        <div class="col">
+            <label for="password">Description</label>
+        </div>
+        <div class="col-10">
+            <textarea name="description" id="description"  required></textarea>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <label for="redirect_url">Redirect URL</label>
+        </div>
+        <div class="col-10">
+            <input type="url" name="redirect_url" id="redirect_url" required >
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <label for="icon_url">Icon URL</label>
+        </div>
+        <div class="col-10">
+            <input type="url" name="icon_url" id="icon_url" required >
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <label for="home_page_url">Home Page URL</label>
+        </div>
+        <div class="col-10">
+            <input type="url" name="home_page_url" id="home_page_url" required >
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <label for="privacy_policy_url">Privacy Policy URL</label>
+        </div>
+        <div class="col-10">
+            <input type="url" name="privacy_policy_url" id="privacy_policy_url" required >
+        </div>
+    </div>
+<br/>
+
+<div class="row">
+    <div class="col">
+        <input value="Create Application" type="submit">
+    </div> 
+    <div class="col-10">
+        <input value="Cancel" type="button" onclick="location.href='/profile'" >
+    </div>
+</div>
+</div>
+
+</form>
+{% endblock %} <!-- end block content-->

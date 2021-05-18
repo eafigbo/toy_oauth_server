@@ -1,0 +1,27 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="{{url_for('static', filename='bootstrap.min.css')}}?random={{ range(1, 51) | random }}">
+
+        <title> Test</title>
+    </head>
+    <body>
+
+            <div class="container">
+                <div class="row">
+                    <div class="col"><a href='/index'>[Home]</a></div>
+                    <div class="col"><a href='/logout'>[Log Out]</a></div>
+                </div>
+            </div>
+
+        <div id="content">
+            <p>
+                Hello there! Welcome to Toy OAuth2!
+            </p>
+        </div>
+        <div id="footer">
+            <p>
+               &copy; Copyright 2020 Ebe ano!
+            </p>
+        </div>
+    </body>
+</html>
