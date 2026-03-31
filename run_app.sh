@@ -1,3 +1,7 @@
-export FLASK_APP=main.py
-export FLASK_ENV=development
-flask run
+cd "$(dirname "$0")/.."
+export FLASK_APP=toy_oauth_server.main
+export FLASK_DEBUG=1
+export ADMIN_EMAIL=admin@test.com
+
+
+python3 -m flask run

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — Toy OAuth Server{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Admin Dashboard</h2>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-md-3">
+        <div class="card shadow-sm text-center h-100">
+            <div class="card-body py-4">
+                <div class="display-5 fw-bold text-primary">{{ user_count }}</div>
+                <div class="text-muted mt-1">Users</div>
+            </div>
+            <div class="card-footer bg-transparent">
+                <a href="/admin/users" class="btn btn-sm btn-outline-primary w-100">Manage</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm text-center h-100">
+            <div class="card-body py-4">
+                <div class="display-5 fw-bold text-success">{{ app_count }}</div>
+                <div class="text-muted mt-1">Applications</div>
+            </div>
+            <div class="card-footer bg-transparent">
+                <a href="/admin/applications" class="btn btn-sm btn-outline-success w-100">Manage</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm text-center h-100">
+            <div class="card-body py-4">
+                <div class="display-5 fw-bold text-info">{{ server_count }}</div>
+                <div class="text-muted mt-1">Resource Servers</div>
+            </div>
+            <div class="card-footer bg-transparent">
+                <a href="/admin/resource_servers" class="btn btn-sm btn-outline-info w-100">Manage</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm text-center h-100">
+            <div class="card-body py-4">
+                <div class="display-5 fw-bold text-warning">{{ token_count }}</div>
+                <div class="text-muted mt-1">Active Tokens</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

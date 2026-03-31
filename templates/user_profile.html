@@ -1,120 +1,65 @@
-{% extends "base.html"%}
-{% block title %} Index {% endblock %}
+{% extends "base.html" %}
+{% block title %}Profile — Toy OAuth Server{% endblock %}
 {% block content %}
 
-
-
-
-
-<br/>
-<div class="container">
-    <div class="row">
-    <div class="col">
-        <label for="first_name">First Name</label>
-    </div>
-    <div class="col-10">
-        {{user.first_name}}
-    </div>
-</div>
-
-
-
-<div class="row">
-    <div class="col">
-        <label for="last_name">Last Name</label>
-    </div>
-
-    <div class="col-10">
-        {{user.last_name}}
-    </div>
-</div>
-<br/>
-
-<div class="row">
-    <div class="col">
-        <label for="email">Email</label>
-    </div>
-
-    <div class="col-10">
-        {{user.email}}
+<div class="row mb-4">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-header">Profile</div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Name</dt>
+                    <dd class="col-sm-8">{{ user.first_name }} {{ user.last_name }}</dd>
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">{{ user.email }}</dd>
+                    <dt class="col-sm-4">Address</dt>
+                    <dd class="col-sm-8">{{ user.address }}</dd>
+                </dl>
+            </div>
+        </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col">
-        <label for="home_address">Home Address</label>
-    </div>
-
-    <div class="col-10">
-        {{user.address}}
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Applications</h4>
+    <a href="/add_application" class="btn btn-sm btn-primary">Add New Application</a>
 </div>
 
-
-
-<table border="1" >
-    <tr>
-        <td colspan="9" style="background-color: gray;">
-            Applications <a href="/add_application"> Add New Application] </a>
-        </td>
-    </tr>
-    <tr style="background-color: grey;">
-        <td >
-            Name
-        </td>
-        <td>
-            Description
-        </td>
-        <td>
-            Redirect URL
-        </td>
-        <td>
-            Client ID
-        </td>
-        <td>
-            Client Secret
-        </td>
-        <td>
-            ICON URL
-        </td>
-        <td>
-            Home Page URL
-        </td>
-        <td>
-            Privacy Policy URL
-        </td>
-
-    </tr>
-        {% for application in user.applications%}
-        <tr>
-            <td>
-                {{ application.application_name}}
-            </td>
-            <td>
-                {{ application.description}}
-            </td>
-            <td>
-                {{ application.redirect_url}}
-            </td>
-            <td>
-                {{ application.client_id}}
-            </td>
-            <td>
-                {{ application.client_secret}}
-            </td>
-            <td>
-                {{ application.icon_url}}
-            </td>
-            <td>
-                {{ application.home_page_url}}
-            </td>
-            <td>
-                {{ application.privacy_policy_url}}
-            </td>
-
-        </tr>
-        {% endfor %}
-
+{% if user.applications %}
+<div class="table-responsive">
+    <table class="table table-bordered table-hover bg-white">
+        <thead class="table-dark">
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Redirect URL</th>
+                <th>Client ID</th>
+                <th>Client Secret</th>
+                <th>Icon URL</th>
+                <th>Home Page URL</th>
+                <th>Privacy Policy URL</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for application in user.applications %}
+            <tr>
+                <td>{{ application.application_name }}</td>
+                <td>{{ application.description }}</td>
+                <td>{{ application.redirect_url }}</td>
+                <td><code>{{ application.client_id }}</code></td>
+                <td><code>{{ application.client_secret }}</code></td>
+                <td>{{ application.icon_url }}</td>
+                <td>{{ application.home_page_url }}</td>
+                <td>{{ application.privacy_policy_url }}</td>
+                <td><a href="/edit_application/{{ application.id }}" class="btn btn-sm btn-outline-primary">Edit</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
+</div>
+{% else %}
+<p class="text-muted">No applications registered yet. <a href="/add_application">Add one.</a></p>
+{% endif %}
 
-{% endblock %} <!-- end block content-->
+{% endblock %}

@@ -1,71 +1,64 @@
-{% extends "base.html"%}
-{% block title %} Index {% endblock %}
+{% extends "base.html" %}
+{% block title %}Register — Toy OAuth Server{% endblock %}
 {% block content %}
-
-<script type="text/javascript">
-function confirm_password_and_submit(){
-    if(document.getElementById("register_form").checkValidity()){
-        if(document.getElementById('password').value == document.getElementById('confirm_password').value){
-            document.getElementById('register_form').submit();
-        }else{
-            alert("Please enter matching passwords!")
-        }
-    }else{
-        alert('please complete all required fields')
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h2 class="card-title mb-4">Create an Account</h2>
+                <form id="register_form" action="/registeruser" method="POST" novalidate>
+                    <div class="mb-3">
+                        <label for="first_name" class="form-label">First Name</label>
+                        <input type="text" class="form-control" name="first_name" id="first_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="last_name" class="form-label">Last Name</label>
+                        <input type="text" class="form-control" name="last_name" id="last_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" id="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="home_address" class="form-label">Home Address</label>
+                        <textarea class="form-control" name="home_address" id="home_address" rows="2" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password" id="password" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="confirm_password" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" name="confirm_password" id="confirm_password" required>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" onclick="confirmAndSubmit()">Register</button>
+                        <a href="/index" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function confirmAndSubmit() {
+    const form = document.getElementById('register_form');
+    const password = document.getElementById('password');
+    const confirm = document.getElementById('confirm_password');
+    confirm.setCustomValidity('');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
     }
-
+    if (password.value !== confirm.value) {
+        confirm.setCustomValidity('Passwords do not match');
+        confirm.reportValidity();
+        return;
+    }
+    form.submit();
 }
+document.getElementById('confirm_password').addEventListener('input', function () {
+    this.setCustomValidity('');
+});
 </script>
-
-
-<form id="register_form" action="/registeruser" method="POST">
-
-<p>
-    <label for="first_name">First Name</label>
-    <input type="text" name="first_name" id="first_name" required >
-</p>
-
-
-<p>
-    <label for="last_name">Last Name</label>
-
-    <input type="text" name="last_name" id="last_name" required>
-</p>
-
-
-<p>
-    <label for="email">Email</label>
-
-    <input type="email" name="email" id="email" required>
-</p>
-
-
-<p>
-    <label for="home_address">Home Address</label>
-
-    <textarea  name="home_address" id="home_address" required></textarea>
-</p>
-
-
-<p>
-    <label for="password">Password (no leading or trailing spaces)</label>
-
-    <input type="password" name="password" id="password"  required>
-</p>
-
-<p>
-    <label for="confirm_password">Confirm Password</label>
-
-    <input type="password" name="confirm_password" id="confirm_password" required>
-</p>
-
-<p>
-    <input value="Submit" type="button" onclick="confirm_password_and_submit()">
-</p>
-
-<p>
-    <input value="Cancel" type="button" onclick="location.href='/index'" >
-</p>
-
-</form>
-{% endblock %} <!-- end block content-->
+{% endblock %}

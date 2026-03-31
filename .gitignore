@@ -68,6 +68,12 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Toy OAuth Server
+keys/
+test.db
+audit.log
+.DS_Store
+
 # Scrapy stuff:
 .scrapy
 
