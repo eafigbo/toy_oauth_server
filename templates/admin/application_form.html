@@ -1,18 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Edit {{ application.application_name }} — Admin{% endblock %}
+{% block title %}{{ 'New Application' if not application else 'Edit ' + application.application_name }} — Admin{% endblock %}
 {% block content %}
 <div class="mb-3">
     <a href="/admin/applications" class="text-muted text-decoration-none small">Admin / Applications</a>
-    <span class="text-muted small"> / Edit</span>
+    <span class="text-muted small"> / {{ 'New' if not application else 'Edit' }}</span>
 </div>
 
 <div class="row justify-content-center">
     <div class="col-md-7">
         <div class="card shadow-sm">
             <div class="card-body p-4">
-                <h3 class="card-title mb-1">Edit Application</h3>
-                <p class="text-muted small mb-4">Owner: <strong>{{ application.user.email if application.user else '—' }}</strong></p>
+                <h3 class="card-title mb-4">
+                    {{ 'New Application' if not application else 'Edit Application' }}
+                </h3>
 
+                {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+
+                {# ── Edit mode: show owner + credentials (read-only) ── #}
+                {% if application %}
+                <p class="text-muted small mb-3">
+                    Owner: <strong>{{ application.user.email if application.user else '—' }}</strong>
+                </p>
                 <div class="mb-4 p-3 bg-light rounded border">
                     <div class="row">
                         <div class="col-sm-3 text-muted small">Client ID</div>
@@ -23,40 +33,65 @@
                         <div class="col-sm-9"><code>{{ application.client_secret }}</code></div>
                     </div>
                 </div>
+                {% endif %}
 
-                <form method="POST" action="/admin/applications/{{ application.id }}/update">
+                <form method="POST" action="{{ action }}">
+
+                    {# ── Create mode: owner selector ── #}
+                    {% if not application %}
+                    <div class="mb-3">
+                        <label for="user_id" class="form-label">Owner</label>
+                        <select class="form-select" name="user_id" id="user_id" required>
+                            <option value="">— select a user —</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.first_name }} {{ u.last_name }} ({{ u.email }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
                     <div class="mb-3">
                         <label for="application_name" class="form-label">Application Name</label>
                         <input type="text" class="form-control" name="application_name"
-                               id="application_name" value="{{ application.application_name }}" required>
+                               id="application_name"
+                               value="{{ application.application_name if application else '' }}" required>
                     </div>
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" name="description" id="description"
-                                  rows="3" required>{{ application.description }}</textarea>
+                                  rows="3" required>{{ application.description if application else '' }}</textarea>
                     </div>
                     <div class="mb-3">
                         <label for="redirect_url" class="form-label">Redirect URL</label>
                         <input type="url" class="form-control" name="redirect_url"
-                               id="redirect_url" value="{{ application.redirect_url }}" required>
+                               id="redirect_url"
+                               value="{{ application.redirect_url if application else '' }}" required>
                     </div>
                     <div class="mb-3">
-                        <label for="icon_url" class="form-label">Icon URL <span class="text-muted small">(optional)</span></label>
-                        <input type="url" class="form-control" name="icon_url"
-                               id="icon_url" value="{{ application.icon_url or '' }}">
+                        <label for="icon_url" class="form-label">
+                            Icon URL <span class="text-muted small">(optional)</span>
+                        </label>
+                        <input type="url" class="form-control" name="icon_url" id="icon_url"
+                               value="{{ application.icon_url if application and application.icon_url else '' }}">
                     </div>
                     <div class="mb-3">
-                        <label for="home_page_url" class="form-label">Home Page URL <span class="text-muted small">(optional)</span></label>
-                        <input type="url" class="form-control" name="home_page_url"
-                               id="home_page_url" value="{{ application.home_page_url or '' }}">
+                        <label for="home_page_url" class="form-label">
+                            Home Page URL <span class="text-muted small">(optional)</span>
+                        </label>
+                        <input type="url" class="form-control" name="home_page_url" id="home_page_url"
+                               value="{{ application.home_page_url if application and application.home_page_url else '' }}">
                     </div>
                     <div class="mb-4">
-                        <label for="privacy_policy_url" class="form-label">Privacy Policy URL <span class="text-muted small">(optional)</span></label>
-                        <input type="url" class="form-control" name="privacy_policy_url"
-                               id="privacy_policy_url" value="{{ application.privacy_policy_url or '' }}">
+                        <label for="privacy_policy_url" class="form-label">
+                            Privacy Policy URL <span class="text-muted small">(optional)</span>
+                        </label>
+                        <input type="url" class="form-control" name="privacy_policy_url" id="privacy_policy_url"
+                               value="{{ application.privacy_policy_url if application and application.privacy_policy_url else '' }}">
                     </div>
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="submit" class="btn btn-primary">
+                            {{ 'Create Application' if not application else 'Save Changes' }}
+                        </button>
                         <a href="/admin/applications" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>

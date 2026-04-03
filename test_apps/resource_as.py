@@ -13,10 +13,8 @@ This app demonstrates the Resource AS side of the ID-JAG flow:
   - Enforces jti uniqueness to prevent replay attacks
   - Issues its own opaque access token
 
-Configuration (environment variables):
-  IDP_URL          — base URL of the IdP              (default: http://localhost:5000)
-  RESOURCE_AS_URI  — this server's URI, must match the
-                     audience value in incoming ID-JAGs (default: http://localhost:5002)
+Configuration:
+  Edit test_apps/config.py — CONFIG['resource_as'] dict.
 
 Startup:
   python3 test_apps/resource_as.py
@@ -27,6 +25,7 @@ import json
 import base64
 import secrets
 import time
+import importlib.util
 
 import requests as http_client
 from flask import Flask, request, jsonify
@@ -37,8 +36,15 @@ from cryptography.hazmat.backends import default_backend
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-IDP_URL         = os.environ.get('IDP_URL',         'http://localhost:5000')
-RESOURCE_AS_URI = os.environ.get('RESOURCE_AS_URI', 'http://localhost:5002')
+_spec = importlib.util.spec_from_file_location(
+    '_config', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.py')
+)
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+_c = _mod.CONFIG.get('resource_as', {})
+
+IDP_URL         = _c.get('idp_url',         'http://localhost:5000')
+RESOURCE_AS_URI = _c.get('resource_as_uri', 'http://localhost:5002')
 
 app = Flask(__name__)
 
@@ -204,16 +210,15 @@ def token():
     """
     Token endpoint — accepts an ID-JAG and issues a resource access token.
 
-    Request parameters:
-      grant_type   urn:ietf:params:oauth:token-type:id-jag  (required)
-      assertion    the ID-JAG JWT                           (required)
-      client_id    the requesting client                    (informational)
+    Per ID-JAG draft §4.4, the client MUST use the JWT Bearer grant (RFC 7523):
+      grant_type   urn:ietf:params:oauth:grant-type:jwt-bearer  (required)
+      assertion    the ID-JAG JWT                                (required)
     """
     grant_type = request.form.get('grant_type')
 
-    if grant_type != 'urn:ietf:params:oauth:token-type:id-jag':
+    if grant_type != 'urn:ietf:params:oauth:grant-type:jwt-bearer':
         return jsonify(error='unsupported_grant_type',
-                       error_description='only id-jag grant type is supported'), 400
+                       error_description='grant_type must be urn:ietf:params:oauth:grant-type:jwt-bearer'), 400
 
     assertion = request.form.get('assertion')
     if not assertion:

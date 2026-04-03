@@ -62,13 +62,17 @@ class AuthorizationCode(Base):
     scope = Column(String(200), default='profile')
     state = Column(String(200))
     nonce = Column(String(200), nullable=True)   # OIDC replay protection
+    # PKCE (RFC 7636) — both nullable so non-PKCE flows continue to work
+    code_challenge        = Column(String(200), nullable=True)
+    code_challenge_method = Column(String(10),  nullable=True)  # 'S256' or 'plain'
     expires_at = Column(DateTime, nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
 
     user = relationship('User')
 
     @staticmethod
-    def create(client_id, redirect_uri, scope, state, user_id, nonce=None):
+    def create(client_id, redirect_uri, scope, state, user_id,
+               nonce=None, code_challenge=None, code_challenge_method=None):
         code = AuthorizationCode()
         code.code = secrets.token_urlsafe(32)
         code.client_id = client_id
@@ -76,6 +80,8 @@ class AuthorizationCode(Base):
         code.scope = scope
         code.state = state
         code.nonce = nonce
+        code.code_challenge        = code_challenge
+        code.code_challenge_method = code_challenge_method
         code.expires_at = datetime.utcnow() + timedelta(minutes=10)
         code.user_id = user_id
         return code

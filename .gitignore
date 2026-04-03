@@ -73,6 +73,7 @@ keys/
 test.db
 audit.log
 .DS_Store
+test_apps/config.py
 
 # Scrapy stuff:
 .scrapy

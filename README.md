@@ -2,6 +2,8 @@
 
 A toy OAuth 2.0 / OpenID Connect Identity Provider built from first principles in Flask. Intended as a learning tool — every protocol step is implemented explicitly so reviewers can trace the full flow through the source code.
 
+**DO NOT USE FOR PRODUCTION UNDER ANY CIRCUMSTANCES.**
+
 ---
 
 ## What is implemented
@@ -15,6 +17,12 @@ A toy OAuth 2.0 / OpenID Connect Identity Provider built from first principles i
 - HTTP Basic Auth at the token endpoint (RFC 6749 §2.3.1)
 - Correct `WWW-Authenticate` headers on 401 responses (RFC 6750)
 
+### PKCE (RFC 7636)
+- `code_challenge` and `code_challenge_method` accepted at `/oauth/authorize`
+- S256 and plain methods supported
+- `code_verifier` verified at token exchange
+- Backward-compatible — flows without PKCE continue to work
+
 ### OpenID Connect
 - ID token issuance as a signed JWT (RS256)
 - `openid`, `profile`, and `email` scopes
@@ -27,6 +35,7 @@ A toy OAuth 2.0 / OpenID Connect Identity Provider built from first principles i
 - RS256 signing — the only non-stdlib call is `private_key.sign()`
 - JWK export — RSA public key components (`n`, `e`) encoded as base64url integers
 - Key persistence — RSA-2048 key pair generated once and saved to `keys/private.pem`
+- PKCE S256 challenge verification (`verify_pkce_challenge`) — stdlib only
 
 ### RFC 8693 Token Exchange
 - `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
@@ -40,7 +49,7 @@ A toy OAuth 2.0 / OpenID Connect Identity Provider built from first principles i
 
 ### Admin panel
 - User management (create, edit, toggle admin)
-- Application management
+- Application management — creation and editing is admin-only; users see their applications read-only
 - Resource Server registration and client access mapping
 
 ### Audit logging
@@ -67,7 +76,7 @@ A toy OAuth 2.0 / OpenID Connect Identity Provider built from first principles i
 └─────────────────────────────────────────────────────┘
          ▲                          ▲
          │ Authorization Code       │ Token Exchange
-         │ ID token                 │ (ID-JAG)
+         │ ID token (PKCE)          │ (ID-JAG)
          ▼                          ▼
 ┌──────────────────┐      ┌──────────────────────┐
 │  Requesting App  │      │  Resource AS         │
@@ -81,11 +90,11 @@ A toy OAuth 2.0 / OpenID Connect Identity Provider built from first principles i
 
 ```
 1. User visits the Requesting App
-2. App redirects to IdP /oauth/authorize
+2. App redirects to IdP /oauth/authorize  (with PKCE code_challenge)
 3. User authenticates and approves the consent screen
 4. IdP redirects back with authorization code
-5. App exchanges code → access_token + id_token        (POST /oauth/token)
-6. App exchanges id_token → ID-JAG                     (POST /oauth/token, token-exchange)
+5. App exchanges code → access_token + id_token  (POST /oauth/token, with code_verifier)
+6. App exchanges id_token → ID-JAG              (POST /oauth/token, token-exchange)
 7. App presents ID-JAG to Resource AS → access_token   (POST localhost:5002/token)
 8. App calls protected resource with access_token       (GET  localhost:5002/resource)
 ```
@@ -135,18 +144,47 @@ The SQLite database `test.db` is created automatically.
 2. Set `ADMIN_EMAIL=<your email>` in `run_app.sh` and restart
 3. Sign in and visit `http://localhost:5000/admin`
 
+Application registration is admin-only. From the admin panel, create an application and assign it to a user as owner.
+
 ---
 
 ## Running the test apps
 
 The test apps demonstrate the full ID-JAG flow end-to-end. They require the IdP to be running first.
 
+### Configuration
+
+Both apps read from `test_apps/config.py` (gitignored). Copy and fill in your values:
+
+```python
+# test_apps/config.py
+CONFIG = {
+    'client': {
+        'client_id':                '',   # from IdP application registration
+        'client_secret':            '',
+        'idp_url':                  'http://localhost:5000',
+        'idp_auth_endpoint':        'http://localhost:5000/oauth/authorize',
+        'idp_token_endpoint':       'http://localhost:5000/oauth/token',
+        'idp_end_session_endpoint': '',   # OIDC logout (RFC 9177), leave blank if unsupported
+        'resource':                 '',   # required by Azure AD v1, blank for OIDC servers
+        'resource_as_url':          'http://localhost:5002',
+        'resource_token_endpoint':  'http://localhost:5002/token',
+        'client_secret_key':        'client-dev-secret-key',
+    },
+    'resource_as': {
+        'idp_url':         'http://localhost:5000',
+        'resource_as_uri': 'http://localhost:5002',
+    },
+}
+```
+
 ### One-time setup on the IdP
 
 1. Register an account and sign in
-2. Create an application with redirect URL `http://localhost:5001/callback` — note the `client_id` and `client_secret`
-3. In the admin panel, create a Resource Server with URI `http://localhost:5002`
+2. In the admin panel, create an application with redirect URL `http://localhost:5001/callback` — note the `client_id` and `client_secret`
+3. Create a Resource Server with URI `http://localhost:5002`
 4. Grant the application access to that Resource Server
+5. Add `client_id` and `client_secret` to `test_apps/config.py`
 
 ### Start the Resource AS
 
@@ -154,31 +192,24 @@ The test apps demonstrate the full ID-JAG flow end-to-end. They require the IdP 
 python3 toy_oauth_server/test_apps/resource_as.py
 ```
 
-Runs at `http://localhost:5002`. Environment variables:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `IDP_URL` | `http://localhost:5000` | IdP base URL (for JWKS fetch) |
-| `RESOURCE_AS_URI` | `http://localhost:5002` | This server's URI — must match the `audience` in incoming ID-JAGs |
+Runs at `http://localhost:5002`.
 
 ### Start the Requesting App
 
 ```bash
-export CLIENT_ID=<client_id from step 2>
-export CLIENT_SECRET=<client_secret from step 2>
 python3 toy_oauth_server/test_apps/client.py
 ```
 
 Runs at `http://localhost:5001`. Open this URL in a browser and click **Start OAuth Flow**.
 
-Environment variables:
+### Test app features
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `CLIENT_ID` | *(required)* | Application `client_id` |
-| `CLIENT_SECRET` | *(required)* | Application `client_secret` |
-| `IDP_URL` | `http://localhost:5000` | IdP base URL |
-| `RESOURCE_AS_URL` | `http://localhost:5002` | Resource AS base URL |
+| Feature | Detail |
+|---|---|
+| PKCE (RFC 7636) | S256 challenge generated automatically on every flow |
+| Verbose HTTP logging | Every request/response logged to console via `requests.Session` hook |
+| Logout | `GET /logout` — clears local state and redirects to IdP end-session endpoint if configured |
+| Third-party IdP support | All endpoints configurable in `config.py`; `resource` parameter supported for Azure AD v1 |
 
 ---
 
@@ -193,20 +224,16 @@ Environment variables:
 | POST | `/registeruser` | Create account |
 | GET | `/signin` | Sign-in form |
 | POST | `/signuserin` | Authenticate |
-| GET | `/profile` | User profile + registered applications |
+| GET | `/profile` | User profile + applications (read-only) |
 | GET | `/logout` | Sign out |
-| GET | `/add_application` | New application form |
-| POST | `/save_application` | Create application |
-| GET | `/edit_application/<id>` | Edit application form |
-| POST | `/update_application/<id>` | Update application |
 
 ### OAuth 2.0 / OIDC
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/oauth/authorize` | Authorization endpoint — shows consent screen |
+| GET | `/oauth/authorize` | Authorization endpoint — shows consent screen; accepts `code_challenge` |
 | POST | `/oauth/authorize` | Approve or deny the authorisation request |
-| POST | `/oauth/token` | Token endpoint — `authorization_code`, `refresh_token`, `token-exchange` |
+| POST | `/oauth/token` | Token endpoint — `authorization_code` (with optional `code_verifier`), `refresh_token`, `token-exchange` |
 | GET | `/oauth/userinfo` | Returns user claims for a valid Bearer token |
 | POST | `/oauth/introspect` | Token introspection (RFC 7662) |
 | POST | `/oauth/revoke` | Token revocation (RFC 7009) |
@@ -221,6 +248,7 @@ Environment variables:
 | GET/POST | `/admin/users` `/admin/users/create` | List and create users |
 | GET/POST | `/admin/users/<id>/edit` `/admin/users/<id>/update` | Edit user |
 | GET | `/admin/applications` | List all applications |
+| GET/POST | `/admin/applications/new` `/admin/applications/create` | Create application (assign to any user) |
 | GET/POST | `/admin/applications/<id>/edit` `/admin/applications/<id>/update` | Edit application |
 | GET/POST | `/admin/resource_servers` `/admin/resource_servers/create` | List and create resource servers |
 | GET/POST | `/admin/resource_servers/<id>/edit` `/admin/resource_servers/<id>/update` | Edit resource server |
@@ -236,18 +264,18 @@ toy_oauth_server/
 ├── main.py              # Flask application — all routes
 ├── models.py            # SQLAlchemy models
 ├── database.py          # Database engine and session setup
-├── jwt_utils.py         # JWT creation, verification, JWKS export (from scratch)
+├── jwt_utils.py         # JWT creation, verification, JWKS export, PKCE (from scratch)
 ├── run_app.sh           # Development server startup script
 ├── requirements.txt     # Python dependencies
 ├── test_oauth_flow.py   # End-to-end test script (uses requests)
 ├── test_apps/
+│   ├── config.py        # Shared configuration for both test apps (gitignored)
 │   ├── client.py        # Test requesting app (port 5001)
 │   └── resource_as.py   # Test Resource Authorization Server (port 5002)
 ├── templates/
 │   ├── base.html
 │   ├── index.html  register.html  signin.html
 │   ├── user_profile.html  user_registered.html
-│   ├── add_application.html  edit_application.html
 │   ├── consent.html
 │   └── admin/
 │       ├── dashboard.html  forbidden.html
@@ -265,7 +293,7 @@ toy_oauth_server/
 |---|---|
 | `users` | Accounts — email, hashed password, `is_admin` flag |
 | `application` | Registered OAuth applications — `client_id`, `client_secret`, `redirect_url` |
-| `authorization_codes` | Short-lived (10 min) single-use codes issued during the auth-code flow |
+| `authorization_codes` | Short-lived (10 min) single-use codes; stores `code_challenge` for PKCE |
 | `access_tokens` | Access tokens (1 hr) and refresh tokens (30 days) with `is_active` flag |
 | `resource_servers` | Registered Resource Authorization Servers — name, URI |
 | `client_resource_access` | Policy mapping: which applications may request ID-JAGs for which resource servers |
@@ -307,6 +335,7 @@ Every security-relevant event is written to `audit.log` (project directory) and 
 | `TOKEN_REVOKED` | Token deactivated via revocation endpoint |
 | `ADMIN_USER_CREATED` | Admin creates a user |
 | `ADMIN_USER_UPDATED` | Admin edits a user |
+| `ADMIN_APP_CREATED` | Admin creates an application |
 | `ADMIN_RS_CREATED` | Admin registers a Resource Server |
 | `ADMIN_ACCESS_GRANTED` | Admin grants a client access to a Resource Server |
 | `ADMIN_ACCESS_REVOKED` | Admin revokes a client's access to a Resource Server |
@@ -321,4 +350,4 @@ Every security-relevant event is written to `audit.log` (project directory) and 
 python3 toy_oauth_server/test_oauth_flow.py
 ```
 
-Requires the IdP to be running. Tests registration, sign-in, the full Authorization Code flow, refresh tokens, introspection, revocation, and error cases.
+Requires the IdP to be running and `ADMIN_EMAIL` set in `run_app.sh`. Tests registration, sign-in, admin application creation, the full Authorization Code + PKCE flow, OIDC claims, refresh tokens, introspection, revocation, and error cases.

@@ -3,41 +3,52 @@
 Test OAuth Requesting Client  —  port 5001
 
 Walks through the full ID-JAG flow end-to-end and displays every step:
-  1. Authorization Code grant  →  access_token + id_token
-  2. Token Exchange             →  ID-JAG (targeting the Resource AS)
-  3. ID-JAG → Resource AS token endpoint  →  resource access_token
-  4. Fetch protected resource   →  response payload
+  1. Authorization Code grant with PKCE (RFC 7636)  →  access_token + id_token
+  2. Token Exchange                                  →  ID-JAG (targeting the Resource AS)
+  3. ID-JAG → Resource AS token endpoint             →  resource access_token
+  4. Fetch protected resource                        →  response payload
 
-Configuration (environment variables):
-  CLIENT_ID       — client_id of the application registered on the IdP
-  CLIENT_SECRET   — client_secret of the same application
-  IDP_URL         — base URL of the IdP            (default: http://localhost:5000)
-  RESOURCE_AS_URL — base URL of the Resource AS    (default: http://localhost:5002)
+Configuration:
+  Edit test_apps/config.py — CONFIG['client'] dict.
 
 Startup:
-  export CLIENT_ID=<id>  CLIENT_SECRET=<secret>
   python3 test_apps/client.py
 """
 
 import os
 import json
 import base64
+import hashlib
+import logging
 import secrets
 import urllib.parse
+import importlib.util
 
 import requests
 from flask import Flask, request, redirect, render_template_string
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-IDP_URL         = os.environ.get('IDP_URL',         'http://localhost:5000')
-RESOURCE_AS_URL = os.environ.get('RESOURCE_AS_URL', 'http://localhost:5002')
-CLIENT_ID       = os.environ.get('CLIENT_ID',       '')
-CLIENT_SECRET   = os.environ.get('CLIENT_SECRET',   '')
-REDIRECT_URI    = 'http://localhost:5001/callback'
+_spec = importlib.util.spec_from_file_location(
+    '_config', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.py')
+)
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+_c = _mod.CONFIG.get('client', {})
+
+IDP_URL                   = _c.get('idp_url',                   'http://localhost:5000')
+IDP_AUTH_ENDPOINT         = _c.get('idp_auth_endpoint',         'http://localhost:5000/oauth/authorize')
+IDP_TOKEN_ENDPOINT        = _c.get('idp_token_endpoint',        'http://localhost:5000/oauth/token')
+IDP_END_SESSION_ENDPOINT  = _c.get('idp_end_session_endpoint',  '')
+RESOURCE                = _c.get('resource',             'http://localhost:5002/resource')
+RESOURCE_AS_URL         = _c.get('resource_as_url',     'http://localhost:5002')
+RESOURCE_TOKEN_ENDPOINT = _c.get('resource_token_endpoint', 'http://localhost:5002/token')
+CLIENT_ID               = _c.get('client_id',           '')
+CLIENT_SECRET           = _c.get('client_secret',       '')
+REDIRECT_URI            = 'http://localhost:5001/callback'
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('CLIENT_SECRET_KEY', 'client-dev-secret-key')
+app.secret_key = _c.get('client_secret_key', 'client-dev-secret-key')
 
 # Server-side state store — keyed by the state value sent to the IdP.
 # Using a server-side dict instead of the Flask session cookie avoids
@@ -45,8 +56,44 @@ app.secret_key = os.environ.get('CLIENT_SECRET_KEY', 'client-dev-secret-key')
 # the session cookie set during /start may not be sent back on the redirect
 # from the IdP (different port → different origin → cookie may be blocked).
 import threading
-_pending_states = {}         # state → {nonce, audience, scope}
-_states_lock    = threading.Lock()
+_pending_states   = {}    # state → {nonce, audience, scope, code_verifier}
+_states_lock      = threading.Lock()
+_current_id_token = None  # stored after a successful flow; used as id_token_hint on logout
+
+
+# ── HTTP logging ──────────────────────────────────────────────────────────────
+
+_http_log = logging.getLogger('http')
+_http_log.setLevel(logging.DEBUG)
+_log_handler = logging.StreamHandler()
+_log_handler.setFormatter(logging.Formatter('%(asctime)s  %(message)s', datefmt='%H:%M:%S'))
+_http_log.addHandler(_log_handler)
+
+
+def _log_response(r, **_):
+    """
+    requests response hook — fires after every request made through _session.
+    Logs the outgoing request and the incoming response.
+    The Authorization header value is truncated to avoid printing credentials.
+    """
+    req = r.request
+
+    # Sanitize headers — show Authorization prefix only, not the full token
+    auth = req.headers.get('Authorization', '')
+    auth_display = (auth[:20] + '…') if auth else '(none)'
+
+    _http_log.debug('→ %s %s', req.method, req.url)
+    _http_log.debug('  Authorization: %s', auth_display)
+    if req.body:
+        body_str = req.body if isinstance(req.body, str) else req.body.decode('utf-8', errors='replace')
+        _http_log.debug('  body: %s', body_str[:400])
+
+    _http_log.debug('← %s %s', r.status_code, r.reason)
+    _http_log.debug('  body: %s', r.text[:600])
+
+
+_session = requests.Session()
+_session.hooks['response'].append(_log_response)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -96,7 +143,8 @@ INDEX_HTML = """
   {% if not configured %}
   <div class="alert alert-warning">
     <strong>Not configured.</strong>
-    Set the <code>CLIENT_ID</code> and <code>CLIENT_SECRET</code> environment variables and restart.
+    Set <code>client_id</code> and <code>client_secret</code> in
+    <code>test_apps/config.py</code> and restart.
   </div>
   {% endif %}
 
@@ -112,7 +160,7 @@ INDEX_HTML = """
         <div class="mb-4">
           <label class="form-label fw-semibold">Audience — Resource AS URI</label>
           <input type="text" class="form-control font-monospace"
-                 name="audience" value="{{ resource_as_url }}">
+                 name="audience" value="{{ the_audience }}">
           <div class="form-text">
             Must exactly match the URI registered in the IdP's admin panel
             and in the Resource AS configuration.
@@ -142,7 +190,8 @@ INDEX_HTML = """
           Grant the client application access to that resource server.
         </li>
         <li class="mb-1">
-          Set <code>CLIENT_ID</code> and <code>CLIENT_SECRET</code> and restart this app.
+          Set <code>client_id</code> and <code>client_secret</code> in
+          <code>test_apps/config.py</code> and restart this app.
         </li>
         <li>Start the Resource AS: <code>python3 test_apps/resource_as.py</code></li>
       </ol>
@@ -168,7 +217,10 @@ RESULT_HTML = """
 
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">ID-JAG Flow Results</h2>
-    <a href="/" class="btn btn-sm btn-outline-secondary">← Start Again</a>
+    <div class="d-flex gap-2">
+      <a href="/" class="btn btn-sm btn-outline-secondary">← Start Again</a>
+      <a href="/logout" class="btn btn-sm btn-outline-danger">Log Out</a>
+    </div>
   </div>
 
   {% if error %}
@@ -220,7 +272,7 @@ def index():
     return render_template_string(INDEX_HTML,
         configured=bool(CLIENT_ID and CLIENT_SECRET),
         idp_url=IDP_URL,
-        resource_as_url=RESOURCE_AS_URL,
+        the_audience=RESOURCE_AS_URL,
     )
 
 
@@ -235,22 +287,65 @@ def start():
     nonce    = secrets.token_urlsafe(16)
     state    = secrets.token_urlsafe(16)
 
+    # PKCE (RFC 7636) — generate verifier and derive S256 challenge.
+    # code_verifier  = random URL-safe string (43 chars from 32 bytes)
+    # code_challenge = BASE64URL(SHA256(code_verifier))
+    # Only the challenge is sent to the IdP now; the verifier is sent
+    # at token-exchange time, proving this client initiated the flow.
+    code_verifier  = secrets.token_urlsafe(32)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode('ascii')).digest()
+    ).rstrip(b'=').decode('ascii')
+
     with _states_lock:
         _pending_states[state] = {
-            'nonce':    nonce,
-            'audience': audience,
-            'scope':    scope,
+            'nonce':         nonce,
+            'audience':      audience,
+            'scope':         scope,
+            'code_verifier': code_verifier,
         }
 
-    params = urllib.parse.urlencode({
-        'client_id':     CLIENT_ID,
-        'redirect_uri':  REDIRECT_URI,
-        'response_type': 'code',
-        'scope':         scope,
-        'state':         state,
-        'nonce':         nonce,
-    })
-    return redirect(f'{IDP_URL}/oauth/authorize?{params}')
+    auth_params = {
+        'client_id':             CLIENT_ID,
+        'redirect_uri':          REDIRECT_URI,
+        'response_type':         'code',
+        'scope':                 scope,
+        'state':                 state,
+        'nonce':                 nonce,
+        'code_challenge':        code_challenge,
+        'code_challenge_method': 'S256',
+    }
+
+
+    return redirect(f'{IDP_AUTH_ENDPOINT}?{urllib.parse.urlencode(auth_params)}')
+
+
+@app.route('/logout')
+def logout():
+    """
+    Clear local state and redirect to the IdP end-session endpoint.
+
+    OIDC RP-Initiated Logout (RFC 9177):
+      GET {end_session_endpoint}?id_token_hint=<token>&post_logout_redirect_uri=http://localhost:5001/
+
+    The id_token_hint tells the IdP which session to terminate.
+    If IDP_END_SESSION_ENDPOINT is not configured, just returns to the home page.
+    """
+    global _current_id_token
+
+    token = _current_id_token
+    _current_id_token = None
+
+    with _states_lock:
+        _pending_states.clear()
+
+    if IDP_END_SESSION_ENDPOINT:
+        params = {'post_logout_redirect_uri': 'http://localhost:5001/'}
+        if token:
+            params['id_token_hint'] = token
+        return redirect(f'{IDP_END_SESSION_ENDPOINT}?{urllib.parse.urlencode(params)}')
+
+    return redirect('/')
 
 
 @app.route('/callback')
@@ -272,27 +367,43 @@ def callback():
     if not state_data:
         return 'Invalid or expired state — flow may have timed out or been replayed', 400
 
-    audience = state_data['audience']
-    scope    = state_data['scope']
-    steps    = []
+    audience      = state_data['audience']
+    scope         = state_data['scope']
+    code_verifier = state_data['code_verifier']
+    steps         = []
 
-    # ── Step 1: Exchange authorization code for tokens ────────────────────────
-    r = requests.post(f'{IDP_URL}/oauth/token', data={
+    # ── Step 1: Exchange authorization code for tokens (with PKCE verifier) ──
+    token_data = {
         'grant_type':    'authorization_code',
         'code':          code,
         'redirect_uri':  REDIRECT_URI,
         'client_id':     CLIENT_ID,
         'client_secret': CLIENT_SECRET,
-    })
+        'code_verifier': code_verifier,
+    }
+
+
+    r = _session.post(IDP_TOKEN_ENDPOINT, data=token_data)
     td = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
-    id_token    = td.get('id_token', '')
+    id_token        = td.get('id_token', '')
     id_token_claims = decode_jwt_claims(id_token) if id_token else {}
 
+    global _current_id_token
+    _current_id_token = id_token or None  # stored for use as id_token_hint on logout
+
+    print('\n── Token endpoint response ──────────────────────────', flush=True)
+    print(f'Status : {r.status_code}', flush=True)
+    print(f'Body   : {json.dumps(td, indent=2)}', flush=True)
+    if id_token:
+        print(f'ID token claims:', flush=True)
+        print(json.dumps(id_token_claims, indent=2), flush=True)
+    print('─────────────────────────────────────────────────────\n', flush=True)
+
     steps.append({
-        'title':  'Step 1 — Authorization Code → Tokens',
+        'title':  'Step 1 — Authorization Code → Tokens (PKCE)',
         'method': 'POST',
-        'url':    f'{IDP_URL}/oauth/token',
-        'request_params': 'grant_type=authorization_code',
+        'url':    IDP_TOKEN_ENDPOINT,
+        'request_params': 'grant_type=authorization_code\ncode_verifier=<verifier>',
         'status':  r.status_code,
         'success': r.status_code == 200,
         'response_str': fmt({k: (v[:40] + '…' if isinstance(v, str) and len(v) > 40
@@ -307,24 +418,36 @@ def callback():
                                       error='Token exchange failed — see Step 1.')
 
     # ── Step 2: Exchange ID token for ID-JAG ──────────────────────────────────
-    r = requests.post(f'{IDP_URL}/oauth/token', data={
+    auth = base64.b64encode((CLIENT_ID+':'+CLIENT_SECRET).encode()).decode()
+
+    exchange_data = {
         'grant_type':           'urn:ietf:params:oauth:grant-type:token-exchange',
         'subject_token':        id_token,
         'subject_token_type':   'urn:ietf:params:oauth:token-type:id_token',
         'requested_token_type': 'urn:ietf:params:oauth:token-type:id-jag',
         'audience':             audience,
-        'scope':                'profile',
-        'client_id':            CLIENT_ID,
-        'client_secret':        CLIENT_SECRET,
-    })
+        'scope':                scope,
+        'resource':             RESOURCE
+    }
+
+    r = _session.post(
+        IDP_TOKEN_ENDPOINT, 
+        headers={'Authorization': f'Basic {auth}'},           
+        data=exchange_data)
     jd = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
     id_jag        = jd.get('access_token', '')
     id_jag_claims = decode_jwt_claims(id_jag) if id_jag else {}
 
+    if id_jag:
+        print(f'ID JAG claims:', flush=True)
+        print(json.dumps(id_jag_claims, indent=2), flush=True)
+    print('─────────────────────────────────────────────────────\n', flush=True)
+
+
     steps.append({
         'title':  'Step 2 — ID Token → ID-JAG',
         'method': 'POST',
-        'url':    f'{IDP_URL}/oauth/token',
+        'url':    IDP_TOKEN_ENDPOINT,
         'request_params': (
             f'grant_type=token-exchange\n'
             f'subject_token_type=id_token\n'
@@ -345,18 +468,23 @@ def callback():
                                       error='ID-JAG exchange failed — see Step 2.')
 
     # ── Step 3: Present ID-JAG to the Resource AS ─────────────────────────────
-    r = requests.post(f'{RESOURCE_AS_URL}/token', data={
-        'grant_type': 'urn:ietf:params:oauth:token-type:id-jag',
-        'assertion':  id_jag,
-        'client_id':  CLIENT_ID,
-    })
+    auth2 = base64.b64encode((CLIENT_ID+':'+CLIENT_SECRET).encode()).decode()
+    r = _session.post(RESOURCE_TOKEN_ENDPOINT, 
+          headers={'Authorization': f'Basic {auth2}'},           
+          data={
+          'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          'assertion':  id_jag,
+          'scope':      scope,
+
+    }
+    )
     rd = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
     resource_token = rd.get('access_token', '')
 
     steps.append({
         'title':  'Step 3 — ID-JAG → Resource Access Token',
         'method': 'POST',
-        'url':    f'{RESOURCE_AS_URL}/token',
+        'url':    RESOURCE_TOKEN_ENDPOINT,
         'request_params': 'grant_type=id-jag\nassertion=<id_jag>',
         'status':  r.status_code,
         'success': r.status_code == 200,
@@ -371,14 +499,14 @@ def callback():
                                       error='Resource AS token exchange failed — see Step 3.')
 
     # ── Step 4: Fetch the protected resource ──────────────────────────────────
-    r = requests.get(f'{RESOURCE_AS_URL}/resource',
+    r = _session.get(f'{RESOURCE}',
                      headers={'Authorization': f'Bearer {resource_token}'})
     res_data = r.json() if r.headers.get('content-type', '').startswith('application/json') else r.text
 
     steps.append({
         'title':  'Step 4 — Fetch Protected Resource',
         'method': 'GET',
-        'url':    f'{RESOURCE_AS_URL}/resource',
+        'url':    f'{RESOURCE}',
         'request_params': 'Authorization: Bearer <resource_access_token>',
         'status':  r.status_code,
         'success': r.status_code == 200,
@@ -396,7 +524,14 @@ if __name__ == '__main__':
         print('WARNING: CLIENT_ID and/or CLIENT_SECRET not set.')
         print('Set them as environment variables before starting.')
     print(f'Client app running at http://localhost:5001')
-    print(f'Redirect URI:    {REDIRECT_URI}')
-    print(f'IdP URL:         {IDP_URL}')
-    print(f'Resource AS URL: {RESOURCE_AS_URL}')
+    print(f'Redirect URI:      {REDIRECT_URI}')
+    print(f'IdP URL:           {IDP_URL}')
+    print(f'Auth endpoint:     {IDP_AUTH_ENDPOINT}')
+    print(f'Token endpoint:    {IDP_TOKEN_ENDPOINT}')
+    if IDP_END_SESSION_ENDPOINT:
+        print(f'End-session EP:    {IDP_END_SESSION_ENDPOINT}')
+    if RESOURCE:
+        print(f'Resource:          {RESOURCE}')
+    print(f'Resource AS URL:   {RESOURCE_AS_URL}')
+    print(f'Resource token EP: {RESOURCE_TOKEN_ENDPOINT}')
     app.run(port=5001, debug=True)

@@ -145,16 +145,12 @@ def register_user():
             user.last_name = request.form.get('last_name')
             user.email = request.form.get('email')
             user.address = request.form.get('home_address')
-            print('address is '+ str(request.form.get('home_address')))
-
-            print('password is '+ str(request.form.get('password')))
             user.set_password(request.form.get('password').strip())
             db_session.add(user)
             db_session.commit()
             _audit('USER_REGISTERED', email=user.email, ip=request.remote_addr)
         else:
             error_message = "User with email address "+request.form.get('email')+" already exists"
-            print(error_message)
             return redirect(url_for("register", message = error_message),302)
 
         return render_template('user_registered.html', user=user)
@@ -187,70 +183,6 @@ def sign_user_in():
 
     return "Only Post Method Supported"
 
-@app.route('/add_application')
-def add_application():
-    message = request.args.get('message')
-    return render_template('add_application.html', message = message)
-
-@app.route('/save_application', methods = ['POST'])
-def save_application():
-    if(request.method == 'POST'):
-        current_user_email = session.get('current_user_email',None)
-        if(current_user_email ==  None):
-            error_message = "Session expired, please sign in"
-            return redirect(url_for("signin", message = error_message),302)
-        else:
-            users = db_session.query(models.User).filter(models.User.email == current_user_email)
-            if(users.count() > 0):
-                user=users[0]
-                error_message = ""
-                application = models.Application()
-                application.application_name = request.form.get('application_name')
-                application.description = request.form.get('description')
-                application.redirect_url = request.form.get('redirect_url')
-                application.icon_url = request.form.get('icon_url')
-                application.home_page_url = request.form.get('home_page_url')
-                application.privacy_policy_url = request.form.get('privacy_policy_url')
-                user.applications.append(application)
-
-
-                db_session.add(user)
-                db_session.commit()
-
-
-                return redirect(url_for("user_profile", message = error_message),302)
-    return "Only Post Method Supported"
-
-
-@app.route('/edit_application/<int:app_id>')
-def edit_application(app_id):
-    current_user_email = session.get('current_user_email')
-    if not current_user_email:
-        return redirect(url_for('signin', message='Session expired, please sign in'))
-    user = db_session.query(models.User).filter_by(email=current_user_email).first()
-    application = db_session.query(models.Application).filter_by(id=app_id, user_id=user.id).first()
-    if not application:
-        return redirect(url_for('user_profile'))
-    return render_template('edit_application.html', application=application)
-
-
-@app.route('/update_application/<int:app_id>', methods=['POST'])
-def update_application(app_id):
-    current_user_email = session.get('current_user_email')
-    if not current_user_email:
-        return redirect(url_for('signin', message='Session expired, please sign in'))
-    user = db_session.query(models.User).filter_by(email=current_user_email).first()
-    application = db_session.query(models.Application).filter_by(id=app_id, user_id=user.id).first()
-    if not application:
-        return redirect(url_for('user_profile'))
-    application.application_name = request.form.get('application_name')
-    application.description      = request.form.get('description')
-    application.redirect_url     = request.form.get('redirect_url')
-    application.icon_url         = request.form.get('icon_url')
-    application.home_page_url    = request.form.get('home_page_url')
-    application.privacy_policy_url = request.form.get('privacy_policy_url')
-    db_session.commit()
-    return redirect(url_for('user_profile'))
 
 
 @app.route('/profile')
@@ -282,9 +214,11 @@ def oauth_authorize():
     client_id    = request.args.get('client_id')
     redirect_uri = request.args.get('redirect_uri')
     response_type = request.args.get('response_type')
-    scope        = request.args.get('scope', 'profile')
-    state        = request.args.get('state', '')
-    nonce        = request.args.get('nonce', '')
+    scope                 = request.args.get('scope', 'profile')
+    state                 = request.args.get('state', '')
+    nonce                 = request.args.get('nonce', '')
+    code_challenge        = request.args.get('code_challenge', '')
+    code_challenge_method = request.args.get('code_challenge_method', '')
 
     # Validate client and redirect_uri first — if invalid, show error page (must NOT redirect)
     application = db_session.query(models.Application).filter_by(client_id=client_id).first()
@@ -309,6 +243,15 @@ def oauth_authorize():
         })
         return redirect(f'{redirect_uri}?{params}')
 
+    # PKCE validation — if a code_challenge is supplied the method must be recognised
+    if code_challenge and code_challenge_method not in ('S256', 'plain'):
+        params = urllib.parse.urlencode({
+            'error': 'invalid_request',
+            'error_description': 'code_challenge_method must be S256 or plain',
+            'state': state,
+        })
+        return redirect(f'{redirect_uri}?{params}')
+
     current_user_email = session.get('current_user_email')
     if not current_user_email:
         session['oauth_next'] = request.url
@@ -319,17 +262,21 @@ def oauth_authorize():
                            scope=scope,
                            state=state,
                            nonce=nonce,
+                           code_challenge=code_challenge,
+                           code_challenge_method=code_challenge_method,
                            redirect_uri=redirect_uri,
                            current_user_email=current_user_email)
 
 
 @app.route('/oauth/authorize', methods=['POST'])
 def oauth_authorize_post():
-    client_id    = request.form.get('client_id')
-    redirect_uri = request.form.get('redirect_uri')
-    scope        = request.form.get('scope', 'profile')
-    state        = request.form.get('state', '')
-    nonce        = request.form.get('nonce') or None   # None if absent or empty
+    client_id             = request.form.get('client_id')
+    redirect_uri          = request.form.get('redirect_uri')
+    scope                 = request.form.get('scope', 'profile')
+    state                 = request.form.get('state', '')
+    nonce                 = request.form.get('nonce') or None
+    code_challenge        = request.form.get('code_challenge') or None
+    code_challenge_method = request.form.get('code_challenge_method') or None
 
     if not request.form.get('approved'):
         _audit('CONSENT_DENIED', user=session.get('current_user_email'), client=client_id, scope=scope)
@@ -350,7 +297,9 @@ def oauth_authorize_post():
         scope=scope,
         state=state,
         user_id=user.id,
-        nonce=nonce
+        nonce=nonce,
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method,
     )
     db_session.add(auth_code)
     db_session.commit()
@@ -385,6 +334,31 @@ def oauth_token():
 
         if auth_code.redirect_uri != redirect_uri:
             return jsonify(error='invalid_grant'), 400
+
+        # ── PKCE verification (RFC 7636) ──────────────────────────────────────
+        code_verifier = request.form.get('code_verifier')
+
+        if auth_code.code_challenge:
+            # A challenge was registered — the verifier is required
+            if not code_verifier:
+                return jsonify(
+                    error='invalid_grant',
+                    error_description='code_verifier is required when code_challenge was used',
+                ), 400
+            if not jwt_utils.verify_pkce_challenge(
+                    code_verifier,
+                    auth_code.code_challenge,
+                    auth_code.code_challenge_method):
+                return jsonify(
+                    error='invalid_grant',
+                    error_description='code_verifier does not match code_challenge',
+                ), 400
+        elif code_verifier:
+            # No challenge was stored but a verifier was sent — reject (confused client)
+            return jsonify(
+                error='invalid_request',
+                error_description='code_verifier sent but no code_challenge was registered',
+            ), 400
 
         user_id = auth_code.user_id
         scope   = auth_code.scope
@@ -886,13 +860,47 @@ def admin_applications():
     return render_template('admin/applications.html', applications=apps)
 
 
+@app.route('/admin/applications/new')
+@admin_required
+def admin_application_new():
+    users = db_session.query(models.User).order_by(models.User.id).all()
+    return render_template('admin/application_form.html', application=None,
+                           action='/admin/applications/create', users=users, error=None)
+
+
+@app.route('/admin/applications/create', methods=['POST'])
+@admin_required
+def admin_application_create():
+    owner_id = request.form.get('user_id', type=int)
+    owner    = db_session.query(models.User).filter_by(id=owner_id).first()
+    if not owner:
+        users = db_session.query(models.User).order_by(models.User.id).all()
+        return render_template('admin/application_form.html', application=None,
+                               action='/admin/applications/create', users=users,
+                               error='Please select a valid owner'), 400
+    application = models.Application()
+    application.application_name  = request.form.get('application_name')
+    application.description       = request.form.get('description')
+    application.redirect_url      = request.form.get('redirect_url')
+    application.icon_url          = request.form.get('icon_url')
+    application.home_page_url     = request.form.get('home_page_url')
+    application.privacy_policy_url = request.form.get('privacy_policy_url')
+    owner.applications.append(application)
+    db_session.add(owner)
+    db_session.commit()
+    _audit('ADMIN_APP_CREATED', admin=session.get('current_user_email'),
+           owner=owner.email, app=application.application_name)
+    return redirect(url_for('admin_applications'))
+
+
 @app.route('/admin/applications/<int:app_id>/edit')
 @admin_required
 def admin_application_edit(app_id):
     application = db_session.query(models.Application).filter_by(id=app_id).first()
     if not application:
         return redirect(url_for('admin_applications'))
-    return render_template('admin/application_form.html', application=application)
+    return render_template('admin/application_form.html', application=application,
+                           action=f'/admin/applications/{app_id}/update', users=None, error=None)
 
 
 @app.route('/admin/applications/<int:app_id>/update', methods=['POST'])
@@ -1021,12 +1029,6 @@ def add_header(r):
     r.headers["Pragma"] = "no-cache"
     r.headers["Expires"] = "0"
     return r
-
-@app.route('/test')
-def test():
-    return render_template('test.html')
-
-
 
 @app.teardown_appcontext
 def shutdown_session(execption = None):

@@ -263,3 +263,36 @@ def get_kid():
 def get_jwks():
     """Return the JWKS dict (suitable for the /.well-known/jwks.json response)."""
     return public_key_to_jwk(get_public_key(), get_kid())
+
+
+# ── PKCE (RFC 7636) ───────────────────────────────────────────────────────────
+
+def verify_pkce_challenge(code_verifier, code_challenge, method):
+    """
+    Verify a PKCE code_verifier against a stored code_challenge.
+
+    The server stores the code_challenge at authorisation time and verifies
+    the code_verifier at token-exchange time.  The client never sends the
+    verifier until it is ready to exchange — intercepting the authorisation
+    code alone is not enough to obtain a token.
+
+    S256 method (recommended):
+        code_challenge = BASE64URL(SHA256(ASCII(code_verifier)))
+        Uses only stdlib: hashlib.sha256 + base64url_encode (already in this module).
+
+    plain method (allowed by RFC 7636, but weak — code_verifier IS the challenge):
+        code_challenge = code_verifier
+
+    Returns True if the verifier is valid, False otherwise.
+    """
+    if method == 'S256':
+        # Derive the challenge from the verifier and compare.
+        # hashlib.sha256 is pure stdlib; base64url_encode is defined above.
+        digest   = hashlib.sha256(code_verifier.encode('ascii')).digest()
+        expected = base64url_encode(digest)
+        return expected == code_challenge
+
+    if method == 'plain':
+        return code_verifier == code_challenge
+
+    return False
