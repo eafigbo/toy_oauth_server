@@ -16,12 +16,12 @@ Usage:
     python3 test_oauth_flow.py
 
 The server must be running first:
-    ./toy_oauth_server/run_app.sh
+    ./run_app.sh
 
 Prerequisites:
-    ADMIN_EMAIL must be set in run_app.sh and the server restarted so that
+    ADMIN_EMAIL must be set in config.py and the server restarted so that
     the admin user is promoted on startup.  Defaults match the value already
-    in run_app.sh (test@test.com).
+    in config.py (admin@test.com).
 """
 
 import re
@@ -32,11 +32,12 @@ import secrets
 import requests
 from urllib.parse import urlparse, parse_qs
 
-BASE_URL     = 'http://localhost:5000'
+from config import ADMIN_EMAIL, ISSUER_URL
+
+BASE_URL     = ISSUER_URL
 REDIRECT_URI = 'http://localhost:9999/callback'   # dummy — we capture the code from the Location header
 
-# Admin credentials — must match ADMIN_EMAIL in run_app.sh
-ADMIN_EMAIL    = 'test@test.com'
+# Admin credentials — must match ADMIN_EMAIL in config.py
 ADMIN_PASSWORD = 'Admin-Password-123!'
 
 # Unique test-user credentials per run so tests never interfere with each other

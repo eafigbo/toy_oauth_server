@@ -13,10 +13,11 @@ from functools import wraps
 from toy_oauth_server.database import init_db, db_session
 from toy_oauth_server import models
 from toy_oauth_server import jwt_utils
+from .config import SECRET_KEY, ADMIN_EMAIL, ISSUER_URL, SUPPORTED_SCOPES
 
 app = Flask(__name__)
 
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.secret_key = SECRET_KEY
 
 init_db()
 jwt_utils.init_keys()
@@ -46,9 +47,8 @@ def _audit(event, **kwargs):
 
 
 # ── Promote a user to admin on startup if ADMIN_EMAIL is set ──────────────────
-_admin_email = os.environ.get('ADMIN_EMAIL')
-if _admin_email:
-    _admin_user = db_session.query(models.User).filter_by(email=_admin_email).first()
+if ADMIN_EMAIL:
+    _admin_user = db_session.query(models.User).filter_by(email=ADMIN_EMAIL).first()
     if _admin_user and not _admin_user.is_admin:
         _admin_user.is_admin = True
         db_session.commit()
@@ -76,13 +76,6 @@ def admin_required(f):
     return decorated
 
 
-ISSUER_URL = os.environ.get('ISSUER_URL', 'http://localhost:5000')
-
-# Scopes this server recognises.
-# openid  — triggers ID token issuance (OIDC core)
-# profile — name claims (given_name, family_name, name)
-# email   — email claim
-SUPPORTED_SCOPES = {'openid', 'profile', 'email'}
 
 _BASIC_WWW_AUTH = {'WWW-Authenticate': 'Basic realm="Toy OAuth Server"'}
 

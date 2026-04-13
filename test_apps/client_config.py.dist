@@ -5,6 +5,12 @@ Edit this file to configure client.py and resource_as.py.
 
 CONFIG = {
 
+    # IdP base URL — shared by client.py and resource_as.py
+    'idp_url': 'https://idp.example.com',
+
+    # Resource AS URL — shared by client.py (sent as audience) and resource_as.py (verifies aud claim)
+    'resource_as_url': 'https://auth.resource.example.com',
+
     # ── client.py (port 5001) ─────────────────────────────────────────────────
 
     'client': {
@@ -12,21 +18,17 @@ CONFIG = {
         # Application credentials — get these from the IdP after registering
         'client_id':     '[CHANGE ME]',
         'client_secret': '[CHANGE ME TOO!]',
-      
-
 
         # IdP endpoints — change these when connecting to a third-party server
-        #'idp_url':                  'https://idp.xaa.dev',
-        #'idp_auth_endpoint':        'https://idp.xaa.dev/authorize',
-        #'idp_token_endpoint':       'https://idp.xaa.dev/token',
+        #'idp_auth_endpoint':        'https://idp.example.com/authorize',
+        #'idp_token_endpoint':       'https://idp.example.com/token',
         #'idp_end_session_endpoint': '',   # OIDC RP-Initiated Logout (RFC 9177)
 
-        # resource the API end point you want to call 
-        #'resource': 'https://api.resource.xaa.dev/api/todos',
+        # Resource endpoint to call
+        #'resource': 'https://api.resource.example.com/api/todos',
 
-        # Resource Authorization Server
-        #'resource_as_url':         'https://auth.resource.xaa.dev',
-        #'resource_token_endpoint': 'https://auth.resource.xaa.dev/token',
+        # Resource AS token endpoint
+        #'resource_token_endpoint': 'https://auth.resource.example.com/token',
 
         # Flask session signing key
         'client_secret_key': 'client-dev-secret-key',
@@ -35,12 +37,6 @@ CONFIG = {
     # ── resource_as.py (port 5002) ────────────────────────────────────────────
 
     'resource_as': {
-
-        # IdP base URL — used to fetch the JWKS for verifying incoming ID-JAGs
-        #'idp_url': 'https://idp.xaa.dev',
-
-        # This server's own URI — must exactly match the audience value in
-        # incoming ID-JAGs and the Resource Server URI in the IdP admin panel
-        #'resource_as_uri': 'https://auth.resource.xaa.dev',
+        # No resource_as-specific settings at this time.
     },
 }

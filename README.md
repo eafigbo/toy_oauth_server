@@ -141,7 +141,7 @@ The SQLite database `test.db` is created automatically.
 ## Admin setup
 
 1. Register an account at `http://localhost:5000/register`
-2. Set `ADMIN_EMAIL=<your email>` in `run_app.sh` and restart
+2. Set `ADMIN_EMAIL` in `config.py` and restart
 3. Sign in and visit `http://localhost:5000/admin`
 
 Application registration is admin-only. From the admin panel, create an application and assign it to a user as owner.
@@ -154,26 +154,26 @@ The test apps demonstrate the full ID-JAG flow end-to-end. They require the IdP 
 
 ### Configuration
 
-Both apps read from `test_apps/config.py` (gitignored). Copy and fill in your values:
+Both apps read from `test_apps/client_config.py` (gitignored). Copy from `test_apps/client_config.py.dist` and fill in your values:
 
 ```python
-# test_apps/config.py
+# test_apps/client_config.py
 CONFIG = {
+    'idp_url':         'http://localhost:5000',   # shared — must match for signature verification
+    'resource_as_url': 'http://localhost:5002',   # shared — sent as audience and verified on receipt
+
     'client': {
         'client_id':                '',   # from IdP application registration
         'client_secret':            '',
-        'idp_url':                  'http://localhost:5000',
         'idp_auth_endpoint':        'http://localhost:5000/oauth/authorize',
         'idp_token_endpoint':       'http://localhost:5000/oauth/token',
         'idp_end_session_endpoint': '',   # OIDC logout (RFC 9177), leave blank if unsupported
-        'resource':                 '',   # required by Azure AD v1, blank for OIDC servers
-        'resource_as_url':          'http://localhost:5002',
+        'resource':                 '',   # resource endpoint to call
         'resource_token_endpoint':  'http://localhost:5002/token',
         'client_secret_key':        'client-dev-secret-key',
     },
     'resource_as': {
-        'idp_url':         'http://localhost:5000',
-        'resource_as_uri': 'http://localhost:5002',
+        # No resource_as-specific settings at this time.
     },
 }
 ```
@@ -184,7 +184,7 @@ CONFIG = {
 2. In the admin panel, create an application with redirect URL `http://localhost:5001/callback` — note the `client_id` and `client_secret`
 3. Create a Resource Server with URI `http://localhost:5002`
 4. Grant the application access to that Resource Server
-5. Add `client_id` and `client_secret` to `test_apps/config.py`
+5. Add `client_id` and `client_secret` to `test_apps/client_config.py`
 
 ### Start the Resource AS
 
@@ -209,7 +209,7 @@ Runs at `http://localhost:5001`. Open this URL in a browser and click **Start OA
 | PKCE (RFC 7636) | S256 challenge generated automatically on every flow |
 | Verbose HTTP logging | Every request/response logged to console via `requests.Session` hook |
 | Logout | `GET /logout` — clears local state and redirects to IdP end-session endpoint if configured |
-| Third-party IdP support | All endpoints configurable in `config.py`; `resource` parameter supported for Azure AD v1 |
+| Third-party IdP support | All endpoints configurable in `client_config.py`; `resource` parameter supported for Azure AD v1 |
 
 ---
 
@@ -261,17 +261,20 @@ Runs at `http://localhost:5001`. Open this URL in a browser and click **Start OA
 
 ```
 toy_oauth_server/
-├── main.py              # Flask application — all routes
-├── models.py            # SQLAlchemy models
-├── database.py          # Database engine and session setup
-├── jwt_utils.py         # JWT creation, verification, JWKS export, PKCE (from scratch)
-├── run_app.sh           # Development server startup script
-├── requirements.txt     # Python dependencies
-├── test_oauth_flow.py   # End-to-end test script (uses requests)
+├── main.py                       # Flask application — all routes
+├── models.py                     # SQLAlchemy models
+├── database.py                   # Database engine and session setup
+├── jwt_utils.py                  # JWT creation, verification, JWKS export, PKCE (from scratch)
+├── config.py                     # Server configuration — SECRET_KEY, ADMIN_EMAIL, ISSUER_URL (gitignored)
+├── config.py.dist                # Configuration template — copy to config.py and fill in values
+├── run_app.sh                    # Development server startup script
+├── requirements.txt              # Python dependencies
+├── test_oauth_flow.py            # End-to-end test script (uses requests)
 ├── test_apps/
-│   ├── config.py        # Shared configuration for both test apps (gitignored)
-│   ├── client.py        # Test requesting app (port 5001)
-│   └── resource_as.py   # Test Resource Authorization Server (port 5002)
+│   ├── client_config.py          # Shared configuration for both test apps (gitignored)
+│   ├── client_config.py.dist     # Configuration template — copy to client_config.py and fill in values
+│   ├── client.py                 # Test requesting app (port 5001)
+│   └── resource_as.py            # Test Resource Authorization Server (port 5002)
 ├── templates/
 │   ├── base.html
 │   ├── index.html  register.html  signin.html

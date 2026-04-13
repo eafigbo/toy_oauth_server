@@ -1,0 +1,16 @@
+"""
+Server configuration template.
+Copy this file to config.py and fill in your values.
+"""
+
+import os
+
+SECRET_KEY  = os.environ.get('SECRET_KEY',  'dev-secret-key-change-in-production')
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', None)
+ISSUER_URL  = os.environ.get('ISSUER_URL',  'http://localhost:5000')
+
+# Scopes this server recognises.
+# openid  — triggers ID token issuance (OIDC core)
+# profile — name claims (given_name, family_name, name)
+# email   — email claim
+SUPPORTED_SCOPES = {'openid', 'profile', 'email', 'todos.read'}

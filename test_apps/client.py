@@ -30,18 +30,18 @@ from flask import Flask, request, redirect, render_template_string
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 _spec = importlib.util.spec_from_file_location(
-    '_config', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.py')
+    '_config', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'client_config.py')
 )
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 _c = _mod.CONFIG.get('client', {})
 
-IDP_URL                   = _c.get('idp_url',                   'http://localhost:5000')
+IDP_URL                   = _mod.CONFIG.get('idp_url',           'http://localhost:5000')
 IDP_AUTH_ENDPOINT         = _c.get('idp_auth_endpoint',         'http://localhost:5000/oauth/authorize')
 IDP_TOKEN_ENDPOINT        = _c.get('idp_token_endpoint',        'http://localhost:5000/oauth/token')
 IDP_END_SESSION_ENDPOINT  = _c.get('idp_end_session_endpoint',  '')
 RESOURCE                = _c.get('resource',             'http://localhost:5002/resource')
-RESOURCE_AS_URL         = _c.get('resource_as_url',     'http://localhost:5002')
+RESOURCE_AS_URL         = _mod.CONFIG.get('resource_as_url', 'http://localhost:5002')
 RESOURCE_TOKEN_ENDPOINT = _c.get('resource_token_endpoint', 'http://localhost:5002/token')
 CLIENT_ID               = _c.get('client_id',           '')
 CLIENT_SECRET           = _c.get('client_secret',       '')
@@ -144,7 +144,7 @@ INDEX_HTML = """
   <div class="alert alert-warning">
     <strong>Not configured.</strong>
     Set <code>client_id</code> and <code>client_secret</code> in
-    <code>test_apps/config.py</code> and restart.
+    <code>test_apps/client_config.py</code> and restart.
   </div>
   {% endif %}
 
@@ -191,7 +191,7 @@ INDEX_HTML = """
         </li>
         <li class="mb-1">
           Set <code>client_id</code> and <code>client_secret</code> in
-          <code>test_apps/config.py</code> and restart this app.
+          <code>test_apps/client_config.py</code> and restart this app.
         </li>
         <li>Start the Resource AS: <code>python3 test_apps/resource_as.py</code></li>
       </ol>

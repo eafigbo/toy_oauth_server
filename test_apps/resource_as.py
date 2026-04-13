@@ -14,7 +14,7 @@ This app demonstrates the Resource AS side of the ID-JAG flow:
   - Issues its own opaque access token
 
 Configuration:
-  Edit test_apps/config.py — CONFIG['resource_as'] dict.
+  Edit test_apps/client_config.py — CONFIG['resource_as'] dict.
 
 Startup:
   python3 test_apps/resource_as.py
@@ -37,14 +37,13 @@ from cryptography.hazmat.backends import default_backend
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 _spec = importlib.util.spec_from_file_location(
-    '_config', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.py')
+    '_config', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'client_config.py')
 )
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
-_c = _mod.CONFIG.get('resource_as', {})
 
-IDP_URL         = _c.get('idp_url',         'http://localhost:5000')
-RESOURCE_AS_URI = _c.get('resource_as_uri', 'http://localhost:5002')
+IDP_URL         = _mod.CONFIG.get('idp_url', 'http://localhost:5000')
+RESOURCE_AS_URI = _mod.CONFIG.get('resource_as_url', 'http://localhost:5002')
 
 app = Flask(__name__)
 

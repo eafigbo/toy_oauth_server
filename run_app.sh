@@ -1,7 +1,5 @@
 cd "$(dirname "$0")/.."
 export FLASK_APP=toy_oauth_server.main
 export FLASK_DEBUG=1
-export ADMIN_EMAIL=admin@test.com
 
-
-python3 -m flask run
+python3 -m flask run --port 8000
